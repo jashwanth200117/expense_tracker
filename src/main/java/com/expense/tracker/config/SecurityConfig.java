@@ -144,7 +144,7 @@ public class SecurityConfig {
                 .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class) // Add JWT filter
-            .httpBasic(); // Use HTTP Basic authentication
+            .httpBasic();
 
         return http.build();
     }

@@ -2,7 +2,6 @@ package com.expense.tracker.controller;
 
 import com.expense.tracker.entity.User;
 import com.expense.tracker.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,7 +14,6 @@ public class AdminController {
 
     private final UserService userService;
 
-    @Autowired
     public AdminController(UserService userService) {
         this.userService = userService;
     }

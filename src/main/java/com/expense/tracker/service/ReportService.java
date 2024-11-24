@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 public class ReportService {
 
     @Autowired
-    private TransactionRepository transactionRepository;
+    private final TransactionRepository transactionRepository;
 
     // Constructor for dependency injection
     public ReportService(TransactionRepository transactionRepository) {
