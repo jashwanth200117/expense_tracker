@@ -32,10 +32,15 @@ public class User {
 
     private String role;
 
+    @Column(name = "refresh_token")
+    private String refreshToken;
+
     @JsonManagedReference
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Transaction> transactions;
-    public User() {}
+
+    public User() {
+    }
 
     // Parameterized constructor
     public User(String username, String email, String password) {
@@ -85,7 +90,6 @@ public class User {
         this.transactions = transactions;
     }
 
-
     public String getRole() {
         return role;
     }
@@ -93,4 +97,13 @@ public class User {
     public void setRole(String role) {
         this.role = role;
     }
+
+    public String getRefreshToken() {
+        return refreshToken;
+    }
+
+    public void setRefreshToken(String refreshToken) {
+        this.refreshToken = refreshToken;
+    }
+
 }
