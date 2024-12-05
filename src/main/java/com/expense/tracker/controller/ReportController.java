@@ -1,11 +1,17 @@
 package com.expense.tracker.controller;
 
-import com.expense.tracker.service.ReportService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.expense.tracker.service.ReportService;
 
 @RestController
 @RequestMapping("/api/reports")
@@ -19,6 +25,7 @@ public class ReportController {
      * @param userId - ID of the user.
      * @return List of categories with total spending.
      */
+    @PreAuthorize("hasAuthority('VIEW_REPORTS')")
     @GetMapping("/category/{userId}")
     public List<Map<String, Object>> getTotalSpendingByCategory(@PathVariable Long userId) {
         return reportService.getTotalSpendingByCategory(userId);
