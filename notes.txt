@@ -1,0 +1,29 @@
+Till now we were using h2 database but now to shift our application to MySQL database we can either install MySQL in our local system and connect it to our application, or we can use the MySQL container using docker and connect it to our application.
+
+Step to connect our application to MySQL Docker container:-
+1. First create separate MySQL containers for each microservice using the below command:
+	docker run -p 3306:3306 --name accountsdb -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=accountsdb -d MySQL
+   Where the first "accountsdb" is the container name where the second "accountsdb" is the table name that should be created inside our MySQL and we are using -d to run the container in detached mode.
+
+2. Now since we don't have a workbench to actually view our database we can use an SQL client like SQLELECRON that can be used to connect to our localhost database using the ports that we have mentioned in our MySQL microservice containers.
+
+3. But in an organizations application the MySQL will be deployed by the infra team and we will just use their database.
+
+4. Now for other microservice we create containers using the below command 
+	docker run -p 3307:3306 --name loansdb -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=loansdb -d MySQL
+   We need to change the port only in the first place because the first port is for our local connection so it has to be different but the other port can be the same since each containers runs on separate environment and its port doesn't matter.
+
+
+Now to connect our microservices to this database we need to do certain changes like:-
+1. Remove the h2 related dependency and add the MySQL dependency into all the microservices.
+2. In the application.yml of each microservice remove all the h2 related configurations add the url , username and password of our MySQL database like
+	datasource:
+	 url: jdbc:mysql://localhost:3306/accountsdb
+	 username: root
+	 password: root
+3. But in actual production environment in a company the credentials will not be exposed like this in our code it will most likely be placed in externalized approaches like environment variables / cli arguments.
+4. Make sure there are sql commands in schema.sql file that is used to create all the tables and its columns.
+5. Also to make sure that your application always used this file we add the below command in our application.yml file
+	sql:
+	 init:
+	  mode:always
