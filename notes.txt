@@ -27,3 +27,24 @@ Now to connect our microservices to this database we need to do certain changes 
 	sql:
 	 init:
 	  mode:always
+
+
+But this is the process if want to connect to the MySQL server using the local system that when our microservices are running in our local system but if we want our microservice containers to connect with the MySQL database we need to do certain changes like:-
+
+1. First go to the docker compose file and create 3 new services for the 3 new databases for your microservices and also make sure that all these containers are on the same network so that they can communicate with each other.
+
+2. Make sure to link these db containers to the microservice containers and also provide the username and password as well AND also add the depends_on command to make sure that the microservice containers should be created only when the db containers are in healthy state:-
+	account:
+	 environment:
+	  SPRING_DATASOURCE_URL:"jdbc:mqsql://accountsdb:3306/accountsdb"
+	  SPRING_DATASOURCE_USERNAME:root
+	  SPRING_DATASOURCE_PASSWORD:root
+
+3. Now for other microservices also we have to provide the port as 3306 in the SPRING_DATASOURCE_URL because all the containers are running inside the same network in our system but we provide the different ports in the db service code like below:-
+	loansdb:
+	 ports:
+	  3307:3306
+
+4. But what if in an organization they are not using containers for connecting to sql/database rather they have their own db or any other method then we need to remove all the database related services from the dockercompose file and then inside the microservice SPRING_DATASOURCE_URL configuration we should provide the actual url of the database.
+
+5. 
