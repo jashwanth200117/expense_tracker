@@ -1,18 +1,293 @@
-Till now we were using h2 database but now to shift our application to MySQL database we can either install MySQL in our local system and connect it to our application, or we can use the MySQL container using docker and connect it to our application.
+Containorizing my application and running it using docker:
+1. Creating docker image
+	add <packaging>jar</packaging> in pom.xml to create a jar file of our entire application in the target folder(also delete everything that is present in target folder first).
 
+2. There are three methods for creating a docker image 
+	using a docker file.
+	using buildpacks.
+	using google jib.
+	but we will use google jib since it is faster and more eficient compared to the other two methods.
+
+3. Creating docker image using google jib method
+	~After deleting existing items of target folder and adding packing jar in pom xml
+	~Add the below plugin configuration in the pom.xml
+			<plugin>
+				<groupId>com.google.cloud.tools</groupId>
+				<artifactId>jib-maven-plugin</artifactId>
+				<version>3.4.2</version>
+				<configuration>
+					<to>
+						<image>jashwanth007/${project.artifactId}:s4</image>
+					</to>
+				</configuration>
+			</plugin>
+
+	~Then go to your project folder location in cmd and run {mvn compile jib:dockerBuild} which will create a docker image of your applciation.
+	~Then use {docker images} to check your image it should be with the name jashwanth007/cards (whatever you had given in the pom.xml plugin)
+	~Then run your application using the image you just created using {docker run -d -p 8080:8080 jashwanth007/cards:s4} . This will start the docker container in the port you have mentioned in the cmd.
+	~In the above command jashwanth007-is the username inside docker 
+						  cards-application name
+						  s4-tag/version of application
+						  -d - to run the app i detached mode that it wont show logs and everything right there itself but it will start running in the background.
+	
+4. Now we can push and pull our docker image to docker hub repository to store them in a specific place like we save all our code in github it is similar to that.
+	~use the command to push into my docker remote repository{docker push docker.io/jashwanth007/accounts:s4}
+	~use {docker pull jashwanth007/account:s4} to pull any image .
+
+5. Now in a microservice architecture it is difficult to run and stop each microservice whenever required imaging if there are 1000 microservices it will become very difficult to start each one them separately.
+	So instead of that we can use docker compose 
+	~We first create a docker-compose.yml file inside our application where we mention all the details about all our application and their image 
+	this is the example of a docker-compose file 
+	{
+		services:
+		  accounts:
+			image: "eazybytes/accounts:s4"
+			container_name: accounts-ms
+			ports:
+			  - "8080:8080"
+			deploy:
+			  resources:
+				limits:
+				  memory: 700m
+			networks:
+			  - eazybank
+		  loans:
+			image: "eazybytes/loans:s4"
+			container_name: loans-ms
+			ports:
+			  - "8090:8090"
+			deploy:
+			  resources:
+				limits:
+				  memory: 700m
+			networks:
+			  - eazybank
+		  cards:
+			image: "eazybytes/cards:s4"
+			container_name: cards-ms
+			ports:
+			  - "9000:9000"
+			deploy:
+			  resources:
+				limits:
+				  memory: 700m
+			networks:
+			  - eazybank
+		networks:
+		  eazybank:
+			driver: "bridge"
+	}
+	
+	~Then run {docker compose up -d} to run all the applications for the first time .
+	~Then run {docker compose down} to shut down and delete all the applications.
+	~Then run {docker compose stop} to just shut down all the applications but not delete anything.
+	~Then run {docker compose start} to restart the existing applications.
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+Config Server and Profiles in Spring Boot
+Each microservice can have three types of environments(profiles) that are
+	-dev
+	-test
+	-prod
+And each of these environments can have their own specific configuration requirements Therefore we need to have separate configuration files for each environments for example:-
+	Example:
+		application-dev.yml for the development environment:
+			server.port: 8081
+			database.url: jdbc:mysql://localhost:3306/devdb
+			logging.level: DEBUG
+
+application-prod.yml for the production environment:
+server.port: 8080
+database.url: jdbc:mysql://prod-db-url:3306/proddb
+logging.level: WARN
+There are many ways to add configuruations in our microservice like:-
+->	Hardcode the values in application.yml and then fetch that value in our code using @Value [But this is not recommended since we need to hardcode the property name inside the @Value annotation for every property present inside the application.yml file and it will become very difficult when we have 100+ microservices and 100+ values]
+->	Use Environment interface by using the inbuild Environment class of java [But again we need to hardcode the property names for each so again a very difficult process]
+FINAL METHOD
+->	Using @ConfigurationProperties we can read all the properties using a single file from a single place now lets see how:-
+⦁		first add the required properties in the application.yml file for example 
+		build:
+  version: "3.0"
+accounts:
+  message: "Welcome to EazyBank accounts related local APIs "
+  contactDetails:
+    name: "John Doe - Developer"
+    email: "john@eazybank.com"
+  onCallSupport:
+    - (555) 555-1234
+    - (555) 523-1345
+⦁		Then we create a DTO record class for the above properties so that we can call that class using a controller like-
+		@ConfigurationProperties(prefix = "accounts")
+public record AccountsContactInfoDto(String message, Map<String, String> contactDetails, List<String> onCallSupport) {
+}
+We are using record class because in a record class the objects are always final and it will automatically generate getters for all the objects behind the scenes.
+Make sure the object names given here are matching with the name present in application.yml file
+⦁		Add the below line in the main application file of your microservice 
+		@EnableConfigurationProperties(value = {AccountsContactInfoDto.class})
+⦁		Finally return an object of the record class in a controller 
+		    @GetMapping("/contact-info")
+    public ResponseEntity<AccountsContactInfoDto> getContactInfo() {
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(accountsContactInfoDto);
+    }
+⦁		But now for different profiles we will have different configurations so we will need to create different .yml files for different environments to excecute that follow the below step-
+⦁		Create application_qa.yml and application_prod.yml files inside your application and add properties inside them
+⦁		leave the properties that will be same for all the profiles in the default application.yml file itself no need to mention them again in qa and prod yml files just add the properties that are different in them
+⦁	Also add the profile name in these files as well so that we can call/activate them from the default application.yml file like(this will not be required once we shift to a config server cause we detect the profile using the file name itslf in config server):-
+		spring:
+  config:
+    activate:
+      on-profile: "qa"
+⦁	Then import these files in the default application.yml file (again this also wont be required after a config server)
+		  config:
+    import:
+      - "application_qa.yml"
+      - "application_prod.yml"
+⦁	Now to activate a specific profile use the below code :-
+		  profiles:
+    active:
+      - "qa"
+⦁	But we cant change the profile values or any configurations while the application is already running since it will again create a new docker image and hence it is not very efficient.
+⦁	Therefore we can chage the properties of our appplication buy using JVM & environment options by first right clicking our application.java file and then modify run configuration and then add the property values these in our ide itself
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+⦁	But again this process isnt very efficient as well since we need to harcode all the configurations and proviate data here and can be visible by anyone and there is not safety for this therefore we can use spring cloud config
+⦁	Each microservice will mostly have three different configuration file(application.yml files) 
+		-accounts.yml (default yml file)
+		-account-prod.yml (production file)
+		-accounts-qa.yml (quality assuarance/testing file)
+⦁	There are three ways to store our configuratation files for our config server 
+		- in local file path of config server application
+		-in local file system 
+		-in github
+⦁	But github is the most recommended approach because of security reasons
+⦁	Now lets start the steps to implement this-
+⦁	Create a new spring boot project by adding the config server and actuator dependencies.
+⦁	Add @EnableConfigServer to our application.java file
+⦁	Add below code in application.yml of config server to activate the github method 
+		spring:
+  application:
+    name: "configserver"
+  profiles:
+    # active: native (if files are stored in local system or local classpath)
+    active: git
+⦁	Add below code as well that gives our github url where the configuration files are stored
+		  cloud:
+    config:
+      server:
+        # native:
+          # search-locations: "classpath:/config"
+          # search-locations: "file:///Users//eazybytes//Documents//config"
+        git:
+          uri: "https://github.com/eazybytes/eazybytes-config.git"
+          default-label: main
+          timeout: 5
+          clone-on-start: true
+          force-pull: true
+CHANGES TO BE MADE IN OUR MICROSERVICE AFTER THE CONFIG SERVER SETUP
+⦁	Add application name in your application.yml of accounts microservice make sure the name is same as the name given for the yml files in the config server
+⦁	Add config client dependency to the pom.xml of accounts microservice and add spring cloud version line as well and finally add spring cloud dependency in the dependency management section of the pom.xml as well.
+⦁	Add spring.config.import:"optional:configserver:http://localhost:8071/" in application.yml of accounts microservice
+⦁	Keep only the default application.yml file and remove all the other .yml files since they will now be stored thorugh the config server.
+⦁	And also dont forget to profiles.active:"prod" or similar line your application.yml of accounts microservice since there will be many .yml files of one microservice the config server should know which configuration file to activate.
+⦁	But if we give profiles.active command in the environment variable of our application than that will override the command present in the .yml file of our microservice since it has more preference.
+
+NOW BACK TO CONFIG SERVER 
+⦁	Now we can have one issue with our configuration files inside the github that is even though our repository will be private what if someone access it and view our passwords or any sensitive data stored in them it can cause problems. Therefore we can do encryption and decyption of properties inside the config server.
+⦁	Add the below line in our .yml file to encrypt any data you want using postman 
+	encrypt:
+  key: "45D81EC1EF61DF9AD8D3E5BB397F9"
+⦁	Now open postman and go to "http://localhost:8071/encrypt" select post and then raw and then text and then add the data you want to encypt in the text region and then encypt it.
+⦁	Then add the encrypted data you got from postman output to your github .yml file in the place where the plain text was present for example
+		-before = password: "password@123"
+		-after = password:"{cipher}ahdcaj78jhvacjahs8jhdch"
+⦁		Always remember in companies the config server application will be deployed behind some firewalls so not everyone can access it decrypt your encrypted data by invoking /decrypt from postman.
+
+⦁	Now we have one more issue that is if we want to change in any properties in our configuration then we need to change it and restart the application but how can we acheive this in run time?
+⦁	There are two methods to do this one is using the actuator refresh path where we can go to postman and post to the localhost of your microservice /actuator/refresh which will refresh our application and help provide thelatest data but this is not so helpful since we have to refresh like this for every microservice that is present in our application then only all the microservice will fetch their latest data from the congif server.
+⦁	Therefor we can use Spring Cloud Bus which can be used to refresh all the microservices and the instances that are runnning thorugh the config sevrer to refresh using just a single step.
+⦁	Please find the below steps to do this
+⦁	First install RabbitMQ to your system using a simple docker command
+⦁	add the spring-cloud-starter-bus-amqp dependency in pom.xml of accounts microservice and other microservices
+⦁	add management.endpoints.web.exposure.include:"*" in .yml files expose all the endpoints that is needed to invoke in postman for bus and refresh endpoints.
+⦁	add the below default rabbitmq property in our .yml files
+		  rabbitmq:
+    host: "localhost"
+    port: 5672
+    username: "guest"
+    password: "guest"
+⦁	Do similar changes to all your micro services 
+⦁	Now go to the localhost of any microservice and post to /actuator/busrefresh you will get succesfull 204 respose in postman now no need to do the similar changes to all other microservices since it will automatically be refreshed as well only by refreshing any one microservice.	This magic process is done cause of the config server as it tells the message broker to trigger refresh for all the microservices reqgistered with even if one of themicroservice is refreshed using busrefresh.
+⦁	But what if we want to refresh our microservices without invoking any api path or without manually refreshing it ourselves then we can use github webhooks
+⦁	Add spring-cloud-config-monitor dependency in the config sever application to expose the api path /monitor
+⦁	Add managements.endpoints.web.exposure.include:* property in the .yml file of the config server as well {BECAUSE WHEN WE DO ANY CHANGES TO OUR FILES PRESENT IN THE GITHUB THEN GITHUB WILL SEND A WEBHOOK HIT/REQUEST TO /MONITOR BUT THE CONFIG SERVER WILL USE THE SPRING CLOUD BUS BEHIND THE SCENES THEREFORE WE NEED TO EXPOSE THE WEB ENDPOINTS IN CONFIGSERVER AS WELL }
+⦁	Now add the http://localhost:8071/monitor url in the websection url in the settings of our config server github repo
+⦁	But github cant detect the local url so use a website like hookdeck.com that will provide a global url for our local url so that we can invoke it using github add that url.
+⦁	Use the below command to generate a webhook url after logging in to hookdeck
+		hookdeck listen 8071 source --cli-path /monitor
+⦁	Now whenever we do any changes and commit to any configration file present in the github of the config server it will be automatically changed for all the microservices and refreshed automatically.
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+⦁	First remove the already existing docker compose file from the accounts micro service
+⦁	 Create a new docker-compose folder inside the project directory and create the separate folders for the 3 environments like default qa and prod
+⦁	Add the docker compose file the you removed from the accounts micro service to the default folder above
+⦁	Add config server properties to it
+⦁	Now we want all our microservices instances to connect with the config server instance 
+		environment:
+  			SPRING_PROFILES_ACTIVE: default
+  			SPRING_CONFIG_IMPORT: configserver:http://configserver:8071/
+⦁	But we want the microservices to be started only after the config server has been started since it is required to start first.
+⦁	We can use liveness snd readiness to check if the config server has started and then start the microservices only after that.
+⦁	Add the below code the application.yml file of config server to enable ealth related endpoints like /actuator/health , /actuator/health/liveness , /actuator/health/readiness 
+management:
+  health:
+    readiness-state:
+      enabled: true
+    liveness-state:
+      enabled: true
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+⦁	Add the below code in the docker compose file where it checks /readiness  to check if the config sever is up or else it will fail the healthcheck
+healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+⦁	This is used to check the /health/readiness url and see if the output is UP else it will show error. And it will start to check after 10s and will retry every 10s till it is up else it will stop
+⦁	Next add the below code in the same docker compose file below all the micro services configurations to tell that all the micro services depends on if the config server started. This checs if the healthcheck has provided success output and then only it can proceed
+depends_on:
+      configserver:
+        condition: service_healthy
+⦁	All our microservices and config server depends on the rabbit-mq as well so we need to add its configurations as well in the docker compose file.
+⦁	Also make sure to add health-check to the rabbit mq as well since all our services depends on it as well.
+⦁	Add depends_on:
+  rabbit:
+    condition: service_healthy
+	only below the config server since all the microservices already depend on config server we dont need to add rabitmq dependency to them as well.
+⦁	Since our docker compose file has a lot of repetitive configurations we can move all those to a common yml file and import it whereever necessary using 
+		extends:
+  			file: common-config.yml
+  			service: microservice-configserver-config
+⦁	Now create docker images for all the microservices and config server and push them into the docker hub.
+⦁	Then navigate to the docker-compose folder and run the docker files
+⦁	Now for the other 2 profiles that is qa and prod just add the same two files (docker-compose.yml and common-config.yml) to the 2 folders and change one line in th ecommon-config as 
+		SPRING_PROFILES_ACTIVE: qa/prod
+-------------------------------------------------------------------------------------------------------------------
+Using MySQL DATABASE in our microservice application.
+Till now we were using h2 database but now to shift our application to MySQL database we can either install MySQL in our local system and connect it to our application, or we can use the MySQL container using docker and connect it to our application.
 Step to connect our application to MySQL Docker container:-
 1. First create separate MySQL containers for each microservice using the below command:
 	docker run -p 3306:3306 --name accountsdb -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=accountsdb -d MySQL
    Where the first "accountsdb" is the container name where the second "accountsdb" is the table name that should be created inside our MySQL and we are using -d to run the container in detached mode.
-
 2. Now since we don't have a workbench to actually view our database we can use an SQL client like SQLELECRON that can be used to connect to our localhost database using the ports that we have mentioned in our MySQL microservice containers.
-
 3. But in an organizations application the MySQL will be deployed by the infra team and we will just use their database.
-
 4. Now for other microservice we create containers using the below command 
 	docker run -p 3307:3306 --name loansdb -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=loansdb -d MySQL
    We need to change the port only in the first place because the first port is for our local connection so it has to be different but the other port can be the same since each containers runs on separate environment and its port doesn't matter.
-
 
 Now to connect our microservices to this database we need to do certain changes like:-
 1. Remove the h2 related dependency and add the MySQL dependency into all the microservices.
@@ -28,23 +303,185 @@ Now to connect our microservices to this database we need to do certain changes 
 	 init:
 	  mode:always
 
-
 But this is the process if want to connect to the MySQL server using the local system that when our microservices are running in our local system but if we want our microservice containers to connect with the MySQL database we need to do certain changes like:-
-
 1. First go to the docker compose file and create 3 new services for the 3 new databases for your microservices and also make sure that all these containers are on the same network so that they can communicate with each other.
-
 2. Make sure to link these db containers to the microservice containers and also provide the username and password as well AND also add the depends_on command to make sure that the microservice containers should be created only when the db containers are in healthy state:-
 	account:
 	 environment:
 	  SPRING_DATASOURCE_URL:"jdbc:mqsql://accountsdb:3306/accountsdb"
 	  SPRING_DATASOURCE_USERNAME:root
 	  SPRING_DATASOURCE_PASSWORD:root
-
 3. Now for other microservices also we have to provide the port as 3306 in the SPRING_DATASOURCE_URL because all the containers are running inside the same network in our system but we provide the different ports in the db service code like below:-
 	loansdb:
 	 ports:
 	  3307:3306
-
 4. But what if in an organization they are not using containers for connecting to sql/database rather they have their own db or any other method then we need to remove all the database related services from the dockercompose file and then inside the microservice SPRING_DATASOURCE_URL configuration we should provide the actual url of the database.
+-------------------------------------------------------------------------------------------------------------------
+Using Service Discovery and Service Registration in our microservice application.
+1. Now if any client wants to call any of our microservice they cannot call the url's directly.
+2. We need to store all the microservices inside a single network that acts a firewall for external traffic and all the calls should pass through an API gateway that acts like a single entry point because a single entry points helps in maintaining the security , auditing and logging.
+3. Now before that what if one microservice wants to communicate with another microservice inside the same network. Then we can directly call that microservice's url in the ip/port that it is hosted but this will work in a monolithic application only because in a microservice architecture each microservice may have a lot of instances with different port numbers and we will not know which instance of a microservice to call or which port it is hosted in so it will become a very tedious process.
+4. We can use DNS as well where all the instances of same microservice can be given same DNS but again each microservice will have different dns , ip's and becomes tedious to map them to a single dns.
+5. We can not use a traditional load balancer where we maintain a routing table and whenever a new instance of a microservice is generated or removed we need to manually update that inside our routing table for future usage of that microservice this becomes very tedious in a containerized microservice architecture as there can be more than 1000 microservices and each of them with at least 5 instances as well.
+-------------------------------------------------------------------------------------------------------------------
+GENERATING A EUREKA SERVER APPLICATION:-
+1. Now to register our microservices with the eureka server.
+2. Create a new eureka server application by adding dependencies like eureka server , actuator and config client to connect to the config server.
+3. Add @EnableEurekaServer configuration above its main application file.
+4. In its application.yml file add config server configurations , actuator configurations like:-
+spring:
+  application:
+    name: "eurekaserver"					//make sure that in your config server file also the same name is used.
+  config:
+    import: "optional:configserver:http://localhost:8071/"	//url of config sever
 
-5. 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"						//for other actuator endpoints other than /health and /info
+  health:
+    readiness-state:
+      enabled: true
+    liveness-state:
+      enabled: true
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+{
+When using Kubernetes as our orchestration platform, the kubelet in each node is responsible for keeping the pods in that node healthy.
+For instance, sometimes our apps may need a little bit of time before being able to accept requests. The kubelet can make sure that the application receives requests only when it’s ready. Also, if the main process of a pod crashes for any reason, the kubelet will restart the container.
+In order to fulfill these responsibilities, Kubernetes has two probes: liveness probes and readiness probes.
+The kubelet will use the readiness probe to determine when the application is ready to accept requests. More specifically, a pod is ready when all of its containers are ready.
+Similarly, the kubelet can check if a pod is still alive through liveness probes. Basically, the liveness probe helps the kubelet know when it should restart a container.
+}
+5. Add eurekaserver.yml in  out config server github repo.
+server:
+  port: 8070
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    fetchRegistry: false
+    registerWithEureka: false
+    serviceUrl:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+6. Run config server application and then eureka server application and go to localhost:8070 where you should see the default url of the eureka server.
+-------------------------------------------------------------------------------------------------------------------
+CONNECTING OUR MICROSERVICES WITH THE EUREKA SERVER APPLICATION:-
+1. First add Eureka Discovery client dependency to the pom.xml of any microservice.
+2. Add the following configurations in the application.yml file of the microservice :-
+management:									 	
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:									//Whenever the microservice is shutting down it will deregister from the eureka server 
+    shutdown:
+      access: unrestricted
+  info:										//To enable evironment info related information
+    env:
+      enabled: true
+eureka:										// To connect to the eureka server with proper ip address and to the right url
+  instance:
+    preferIpAddress: true
+  client:
+    fetchRegistry: true
+    registerWithEureka: true
+    serviceUrl:
+      defaultZone: http://localhost:8070/eureka/ 
+info:										// The info that will be visible through the eureka servers UI
+  app:
+    name: "accounts"
+    description: "Eazy Bank Accounts Application"
+    version: "1.0.0"
+
+3. Now start the microservice and verify its registration in the eureka server UI.
+-------------------------------------------------------------------------------------------------------------------
+1. Now usually in production environments in companies it is not recommended to shutdown any of our application directly using the ide itself what we can do is post using http://localhost:8080/actuator/shutdown to shutdown any of our application.
+2. Also our microservices sends their heartbeat every 30 seconds to the eureka server to let it know that the service is running. In-fact we can this if we shut down the eureka server then we will get an exception in the logs of our microservice.
+-------------------------------------------------------------------------------------------------------------------
+NOW FOR COMMUNICATING BETWEEN THE MICROSERVICES THAT IS FOR INTER SERVICE COMMUNICATION:-
+1. Add openFeign dependency in the microservice where you want to communicate with other microservcices.
+2. Add @EnableFeignClients annotation in the main application.
+3. Inside the serice folder add a client folder and create seprate interfaces to call other microservices like - CardsFeignClient interface and LoansFeignClient interface.
+4. Add @FeignClient("cards") on top of the interface and make sure the name("cards") is same as the name specified in the eureka server.
+5. Now create the method here that you want to call in the cards microservice and make sure the everything is same as the method in the cards microservice but without the implementation and validations and make sure complete url is there in the mapping like below.
+@GetMapping(value="/fetch",consumes = "application/json")
+public ResponseEntity<CardsDto> fetchCardDetails(@RequestParam String mobileNumber);
+The same method in the cards microservice was like below 
+@GetMapping("/fetch")
+public ResponseEntity<CardsDto> fetchCardDetails(@RequestParam
+                                                           @Pattern(regexp="(^$|[0-9]{10})",message = "Mobile number must be 10 digits")
+                                                           String mobileNumber) {
+    CardsDto cardsDto = iCardsService.fetchCard(mobileNumber);
+    return ResponseEntity.status(HttpStatus.OK).body(cardsDto);
+}
+You can see that we have abstracted away the implementation and the validations in our accounts microservice and added only the fields that were required.
+6. Create a similar abstract method in the LoansFeignClient as well like below:-
+@FeignClient("loans")
+public interface LoansFeignClient {
+
+    @GetMapping(value="/fetch",consumes = "application/json")
+    public ResponseEntity<LoansDto> fetchLoanDetails(@RequestParam String mobileNumber);
+}
+7. Now we need to create a new DTO to store all the data that we getting from other microservices and store them in a single entity so that we can send that to the client application.
+8. Add all the feilds inside this CustomerDetailsDTO to store the data's from other microservices like accountsDto , LoansDto , CardsDto .
+9. Create a new Controller file called CustomerController to call customer methods and create a method inside it store and return the customer details to the client.
+10. Create a service layer to get all the details from the three microservices and store them all in the CustomerDetailsDto and return the complete customer details. Make sure to create the necessary mappers to store the data.
+@Override
+public CustomerDetailsDto fetchCustomer(String mobileNumber) {
+    Customer customer = customerRepository.findByMobileNumber(mobileNumber).orElseThrow(
+            () -> new ResourceNotFoundException("Customer", "mobileNumber", mobileNumber)
+    );
+    Accounts accounts = accountsRepository.findByCustomerId(customer.getCustomerId()).orElseThrow(
+            () -> new ResourceNotFoundException("Account", "customerId", customer.getCustomerId().toString())
+    );
+
+    CustomerDetailsDto customerDetailsDto= CustomerMapper.mapToCustomerDetailsDto(customer, new CustomerDetailsDto());
+
+    customerDetailsDto.setAccountsDto(AccountsMapper.mapToAccountsDto(accounts,new AccountsDto()));
+
+    LoansDto loansDto = loansFeignClient.fetchLoanDetails(mobileNumber).getBody();
+    customerDetailsDto.setLoansDto(loansDto);
+
+    CardsDto cardsDto = cardsFeignClient.fetchCardDetails(mobileNumber).getBody();
+    customerDetailsDto.setCardsDto(cardsDto);
+
+    return customerDetailsDto;
+}
+11. Now call this service layer from the controller and return the complete customer object.
+----------------------------------------------------------------------------------------------------------------------------------------------------
+1. In our eureka server dashboard we can see an error like 
+	EMERGENCY! EUREKA MAY BE INCORRECTLY CLAIMING INSTANCES ARE UP WHEN THEY'RE NOT. RENEWALS ARE LESSER THAN THRESHOLD AND HENCE THE INSTANCES ARE NOT BEING EXPIRED JUST TO BE SAFE.
+2. This error is present because all our microservices and their instances send heartbeat signals to the eureka server every 30sec to indicate that it is still alive and functioning.
+3. And if for some reason like network glitches or temporary delays if the system fails to send the heartbeat then this can lead to un-nessasary eviction or termination of healthy instances this can be a huge problem in large production environments.
+4. So to solve this issue eureka server will not panic when it is not receiving heartbeats from majority of the instances, instead it will be calm and enters into self-preservation mode .
+5. When eureka enters this mode it will not remove the existing microservices even when it does'nt receive any hartbeat. Instead it will wait for a certain period of time till it receives helthy heartbeats form those micrservices.
+----------------------------------------------------------------------------------------------------------------------------------------------------
+Containerizing Eureka server
+1. First add the jib related dependency in pom.xml of eureka server
+2. Create docker images of it using 
+	mvn compile jib:dockerBuild
+3. Go to the docker compose folder and add the eureka server configurations in it and we are all done.
+----------------------------------------------------------------------------------------------------------------------------------------------------
+Adding a gateway to our microservices application
+1. This gateway will act as a single entry point for the clients to all the microservices in our application.
+Acts as the Entry Point.
+Automatically routes requests to microservices.
+Uses Discovery Client to dynamically discover service instances.
+Provides security, rate limiting, and monitoring.
+2. So to create a GatewayServer project go to start.spring.io and first add all the required dependencies like relative gateway , config client , eureka client , actuator , devtools etc.
+3. In the pom.xml add the required configuration for config server import , eureka registration , actuator url exposures , (spring.cloud.gateway.discovery.locator.enabled: true) - It automatically routes requests to services registered in Eureka without explicitly configuring each route.
+
+
+
+
+
+
+
+
+
+
